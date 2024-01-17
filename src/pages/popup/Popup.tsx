@@ -2,6 +2,7 @@ import { StarIcon } from '@chakra-ui/icons';
 import {
   Alert,
   AlertIcon,
+  Badge,
   Box,
   Button,
   Grid,
@@ -31,6 +32,8 @@ export default function Popup() {
   const [from, setFrom] = React.useState<number>(1);
   const [number, setNumber] = React.useState<number>(250);
   const [numberOfURLs, setNumberOfURLs] = React.useState<number>(0);
+  const [currentPos, setCurrentPos] = React.useState<number>(0);
+  const [delay, setDelay] = React.useState<number>(30);
   const [isScraping, setIsScraping] = React.useState<boolean>(false);
 
   const handleChangeFrom = (value: number) => {
@@ -43,8 +46,17 @@ export default function Popup() {
     chrome.storage.local.set({ TEMU_number: value });
   };
 
+  const handleChangeDelay = (value: number) => {
+    setDelay(value);
+    chrome.storage.local.set({ TEMU_delay: value });
+  };
+
   const getURLs = () => {
     chrome.runtime.sendMessage({ type: 'GET_URLS' });
+  };
+
+  const clearURLs = () => {
+    chrome.runtime.sendMessage({ type: 'CLEAR_URLS' });
   };
 
   const startScraping = () => {
@@ -66,13 +78,13 @@ export default function Popup() {
     if (message.type === 'RECEIVE_URL') {
       toast({
         title: `GET URLS`,
-        description: `We've found ${message.urls} urls`,
+        description: `We've added ${message.delta} urls`,
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
 
-      setNumberOfURLs(message.urls);
+      setNumberOfURLs(message.total);
     } else if (message.type === 'STARTED_PROCESSING') {
       toast({
         title: `STARTED PROCESSING`,
@@ -93,12 +105,31 @@ export default function Popup() {
       });
 
       setIsScraping(false);
+    } else if (message.type === 'CLEARED_URLS') {
+      toast({
+        title: `CLEAR URLs`,
+        description: `We've cleared urls`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+
+      setNumberOfURLs(0);
     }
   };
 
   React.useEffect(() => {
     chrome.storage.local.get(
-      ['TEMU_from', 'TEMU_number', 'TEMU_urls', 'TEMU_processing', 'TEMU_rate_min', 'TEMU_rate_max'],
+      [
+        'TEMU_from',
+        'TEMU_number',
+        'TEMU_urls',
+        'TEMU_processing',
+        'TEMU_rate_min',
+        'TEMU_rate_max',
+        'TEMU_currentpos',
+        'TEMU_delay',
+      ],
       function (result) {
         console.log(result);
         if (result.TEMU_from) {
@@ -113,12 +144,12 @@ export default function Popup() {
         if (result.TEMU_processing) {
           setIsScraping(result.TEMU_processing);
         }
-        if (result.TEMU_rate_min || result.TEMU_rate_max) {
-          setSliderValue([
-            typeof result.TEMU_rate_min === 'number' ? result.TEMU_rate_min : sliderValue[0],
-            typeof result.TEMU_rate_max === 'number' ? result.TEMU_rate_max : sliderValue[1],
-          ]);
-        }
+        setSliderValue([
+          typeof result.TEMU_rate_min === 'number' ? result.TEMU_rate_min : sliderValue[0],
+          typeof result.TEMU_rate_max === 'number' ? result.TEMU_rate_max : sliderValue[1],
+        ]);
+        typeof result.TEMU_currentpos === 'number' && setCurrentPos(result.TEMU_currentpos);
+        typeof result.TEMU_delay === 'number' && setDelay(result.TEMU_delay);
       },
     );
 
@@ -134,9 +165,14 @@ export default function Popup() {
       <Heading size="lg" mb={4} textAlign={'center'}>
         TEMU Scraping
       </Heading>
-      <Button w="100%" colorScheme="orange" onClick={getURLs}>
-        GET URLs
-      </Button>
+      <HStack spacing="24px" alignItems="center" justifyContent="center" mt={4} mx={2}>
+        <Button w="100%" colorScheme="orange" onClick={getURLs}>
+          ADD URLs
+        </Button>
+        <Button w="100%" colorScheme="red" variant="outline" onClick={clearURLs}>
+          CLEAR URLs
+        </Button>
+      </HStack>
       <HStack spacing="24px" alignItems="center" justifyContent="center" mt={4} mx={2}>
         <Text fontSize="md">Rate: </Text>
         <RangeSlider min={0} max={5} step={1} value={sliderValue} onChange={v => handleRateChange(v)}>
@@ -155,10 +191,10 @@ export default function Popup() {
           </Tooltip>
         </RangeSlider>
       </HStack>
-      <Grid templateColumns="repeat(2, 1fr)" gap={6} mt={4} mx={2}>
+      <Grid templateColumns="repeat(2, 1fr)" gap={3} mt={4} mx={2}>
         <GridItem w="100%" h="10">
           <HStack spacing="24px" alignItems="center" justifyContent="center">
-            <Text fontSize="md">From: </Text>
+            <Text fontSize="md">FROM: </Text>
             <NumberInput value={from} min={1} step={1} onChange={v => handleChangeFrom(parseInt(v))}>
               <NumberInputField />
               <NumberInputStepper>
@@ -170,7 +206,7 @@ export default function Popup() {
         </GridItem>
         <GridItem w="100%" h="10">
           <HStack spacing="24px" alignItems="center" justifyContent="center">
-            <Text fontSize="md">Number: </Text>
+            <Text fontSize="md">NUMBER: </Text>
             <NumberInput value={number} min={1} step={1} onChange={v => handleChangeNumber(parseInt(v))}>
               <NumberInputField />
               <NumberInputStepper>
@@ -182,6 +218,16 @@ export default function Popup() {
         </GridItem>
       </Grid>
       <HStack spacing={4} alignItems="center" justifyContent="center" mt={4} mx={2}>
+        <Text fontSize="md">DELAY(s): </Text>
+        <NumberInput w="100%" value={delay} min={10} step={1} onChange={v => handleChangeDelay(parseInt(v))}>
+          <NumberInputField />
+          <NumberInputStepper>
+            <NumberIncrementStepper />
+            <NumberDecrementStepper />
+          </NumberInputStepper>
+        </NumberInput>
+      </HStack>
+      <HStack spacing={4} alignItems="center" justifyContent="center" mt={4} mx={2}>
         <Button
           w="100%"
           colorScheme="orange"
@@ -189,16 +235,16 @@ export default function Popup() {
           onClick={startScraping}
           isDisabled={isScraping}
           variant={'outline'}>
-          Start Scraping
+          START SCRAPING
         </Button>
         <Button w="100%" colorScheme="orange" leftIcon={<MdStop />} onClick={stopScraping} isDisabled={!isScraping}>
-          Stop
+          STOP
         </Button>
       </HStack>
-      <Alert status="info" p={2} mt={6} rounded={6}>
-        <AlertIcon />
-        There are {numberOfURLs} urls in total
-      </Alert>
+      <HStack spacing={4} alignItems="center" mt={4} mx={2}>
+        <Badge>Total: {numberOfURLs} URLs</Badge>
+        <Badge colorScheme="green">Current Positoin: {currentPos + 1}</Badge>
+      </HStack>
     </Box>
   );
 }

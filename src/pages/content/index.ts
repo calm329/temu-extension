@@ -37,6 +37,8 @@ async function download(rawData, rateRange) {
   )
     return;
 
+  console.log('1');
+
   const data = {};
 
   const size_guide = {
@@ -145,6 +147,10 @@ document.onreadystatechange = function () {
     (document.head || document.documentElement).appendChild(script);
     script.remove();
   }
+
+  if (this.location.href.includes('https://www.temu.com/bgn_verification.html')) {
+    chrome.runtime.sendMessage({ type: 'VERIFICATION' });
+  }
 };
 
 window.addEventListener('message', function (event) {
@@ -180,6 +186,7 @@ chrome.runtime.onMessage.addListener(function (request) {
 
     chrome.runtime.sendMessage({ urls, type: 'PRODUCT_URL' });
   } else if (request.type === 'SEND_RATE_RANGE') {
+    console.log('SEND_RATE_RANGE', request.data, request.rateRange);
     download(request.data, request.rateRange);
   }
 });
