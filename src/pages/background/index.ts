@@ -9,13 +9,13 @@
 //  */
 // reloadOnUpdate('pages/content/style.scss');
 
-console.log('background loaded');
+// console.log('background loaded');
 
 chrome.runtime.onMessage.addListener(function (message, sender) {
   if (message.type === 'PRODUCT_URL') {
     chrome.storage.local.get(['TEMU_urls'], function (result) {
-      let delta = (result.TEMU_urls || []).length;
-      let urls = [...new Set([...(result.TEMU_urls || []), ...message.urls])];
+      const delta = (result.TEMU_urls || []).length;
+      const urls = [...new Set([...(result.TEMU_urls || []), ...message.urls])];
 
       chrome.storage.local.set({ TEMU_urls: urls }, function () {
         chrome.runtime.sendMessage({ type: 'RECEIVE_URL', delta: urls.length - delta, total: urls.length });
@@ -79,33 +79,55 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function openTab(i) {
-  chrome.storage.local.set({ TEMU_currentpos: i });
-  chrome.storage.local.get(['TEMU_processing', 'TEMU_urls', 'TEMU_delay'], async function (result) {
-    const processing = result.TEMU_processing || false;
-    const urls = result.TEMU_urls || [];
-    const delay_sec = result.TEMU_delay || 30;
+async function openTab(i) {
+  try {
+    await chrome.storage.local.set({ TEMU_currentpos: i });
+    const {
+      TEMU_processing: temu_processing,
+      TEMU_urls: temu_urls,
+      TEMU_delay: temu_delay,
+    } = await chrome.storage.local.get(['TEMU_processing', 'TEMU_urls', 'TEMU_delay']);
+
+    const processing = temu_processing || false;
+    const urls = temu_urls || [];
+    const delay_sec = temu_delay || 30;
 
     if (i >= urls.length || !processing) return;
 
-    await chrome.tabs.create({ url: urls[i], active: true }, async function (tab) {
-      await delay(delay_sec * 1000);
-      chrome.tabs.remove(tab.id, function () {
-        chrome.storage.local.get(['TEMU_number', 'TEMU_urls', 'TEMU_from'], function (result) {
-          let from = typeof result.TEMU_from === 'number' ? result.TEMU_from : 0;
-          let number = result.TEMU_number || result.TEMU_urls?.length || 100;
+    const tab = await chrome.tabs.create({ url: urls[i], active: true });
 
-          if (i + 1 < from + number && i + 1 < urls.length) {
-            openTab(i + 1);
-          } else {
-            chrome.storage.local.set({ TEMU_processing: false }, function () {
-              chrome.runtime.sendMessage({ type: 'STOPPED_PROCESSING' });
-            });
-          }
-        });
-      });
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('assets/js/inject.js');
+        (document.head || document.documentElement).appendChild(script);
+        script.remove();
+      },
     });
-  });
+
+    await delay(delay_sec * 1000);
+
+    await chrome.tabs.remove(tab.id);
+
+    const {
+      TEMU_number: temu_number,
+      TEMU_urls: _temu_urls,
+      TEMU_from: temu_from,
+    } = await chrome.storage.local.get(['TEMU_number', 'TEMU_urls', 'TEMU_from']);
+
+    const from = temu_number === 'number' ? temu_from : 0;
+    const number = temu_number || _temu_urls?.length || 100;
+
+    if (i + 1 < from + number && i + 1 < urls.length) {
+      await openTab(i + 1);
+    } else {
+      await chrome.storage.local.set({ TEMU_processing: false });
+      await chrome.runtime.sendMessage({ type: 'STOPPED_PROCESSING' });
+    }
+  } catch (error) {
+    console.log('=====');
+  }
 }
 
 function start(index) {

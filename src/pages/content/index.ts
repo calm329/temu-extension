@@ -138,15 +138,12 @@ async function download(rawData, rateRange) {
 }
 
 document.onreadystatechange = function () {
-  if (document.readyState == 'complete') {
-    const script = document.createElement('script');
-    script.textContent = `
-      // Post message from page to extension
-      window.postMessage({ type: "FROM_PAGE", text: window.rawData }, "*");
-    `;
-    (document.head || document.documentElement).appendChild(script);
-    script.remove();
-  }
+  // if (document.readyState == 'complete') {
+  //   const script = document.createElement('script');
+  //   script.src = chrome.runtime.getURL('assets/js/inject.js');
+  //   (document.head || document.documentElement).appendChild(script);
+  //   script.remove();
+  // }
 
   if (this.location.href.includes('https://www.temu.com/bgn_verification.html')) {
     chrome.runtime.sendMessage({ type: 'VERIFICATION' });

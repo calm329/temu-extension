@@ -1,7 +1,5 @@
 import { StarIcon } from '@chakra-ui/icons';
 import {
-  Alert,
-  AlertIcon,
   Badge,
   Box,
   Button,
